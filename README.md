@@ -28,14 +28,6 @@ It prioritizes:
 - **Governance and compliance** (audit trails, policy controls, enterprise readiness)
 - **Data and knowledge engineering** (data lineage, corpora, indexing, quality)
 
-## Quick start (how to use this repo)
-
-Pick one of these usage modes:
-
-- **Interview prep mode (fast)**: Read the `README.md` in each module and make a 1-page summary (architecture, tradeoffs, failure modes).
-- **Build mode (practical)**: For a module you’re actively building at work, add an architecture diagram and an ADR (design decision) per week.
-- **Content mode (visibility)**: Turn one failure mode + mitigation into a LinkedIn post (include one diagram or metric).
-
 ## Repository structure
 
 Each module is intended to contain (as you build it out):
@@ -129,5 +121,4 @@ Use this as the “map” for important GenAI terminology and systems topics:
 
 **Aman Jaiswal**  
 AI System Engineer specializing in GenAI & Production LLM Platforms.  
-LinkedIn: `https://www.linkedin.com/in/amanjaiswal777/`  
-WhatsApp: `+91-8084410670`
+LinkedIn: `https://www.linkedin.com/in/amanjaiswal777/`
