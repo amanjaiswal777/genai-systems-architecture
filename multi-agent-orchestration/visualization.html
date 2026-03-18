@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Multi‑Agent Orchestration — 3D Mental Model</title>
+    <style>
+      :root{
+        --bg0:#070812;
+        --bg1:#0b1230;
+        --ink:#eaf0ff;
+        --muted:#a8b3d6;
+        --accent:#7cffd8;
+        --warn:#ffcf5c;
+        --bad:#ff6b8b;
+        --panel: rgba(12, 16, 38, .66);
+        --stroke: rgba(255,255,255,.10);
+      }
+      html, body { height: 100%; margin: 0; background: radial-gradient(1200px 800px at 20% 10%, #18235a 0%, var(--bg0) 55%, #05050b 100%); color: var(--ink); overflow: hidden; }
+      canvas { display:block; }
+      .hud{
+        position: fixed; inset: 16px 16px auto 16px;
+        display:flex; gap:12px; align-items:flex-start; justify-content:space-between;
+        pointer-events:none;
+      }
+      .card{
+        pointer-events:auto;
+        max-width: 520px;
+        backdrop-filter: blur(10px);
+        background: var(--panel);
+        border: 1px solid var(--stroke);
+        border-radius: 16px;
+        padding: 14px 14px 12px;
+        box-shadow: 0 24px 90px rgba(0,0,0,.45);
+      }
+      .title{
+        font-family: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+        font-weight: 700;
+        letter-spacing: .2px;
+        margin: 0 0 6px;
+        font-size: 16px;
+      }
+      .subtitle{
+        margin: 0 0 10px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+      .legend{
+        display:grid; grid-template-columns: 1fr 1fr;
+        gap: 8px 10px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .dot{ display:inline-block; width:10px; height:10px; border-radius:999px; margin-right:8px; transform: translateY(1px); }
+      .dot.agent{ background: linear-gradient(135deg, #6cf 0%, #7cffd8 100%); }
+      .dot.tool{ background: linear-gradient(135deg, #ffd36c 0%, #ffcf5c 100%); }
+      .dot.guard{ background: linear-gradient(135deg, #ff6b8b 0%, #c86bff 100%); }
+      .dot.state{ background: linear-gradient(135deg, #a8b3d6 0%, #ffffff 100%); }
+      .kbd{
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 11px;
+        padding: 2px 6px;
+        border: 1px solid var(--stroke);
+        border-bottom-color: rgba(255,255,255,.18);
+        border-radius: 7px;
+        background: rgba(255,255,255,.06);
+        color: var(--ink);
+      }
+      .right{
+        max-width: 420px;
+      }
+      .pillrow{ display:flex; flex-wrap:wrap; gap:8px; margin-top: 8px; }
+      .pill{
+        font-size: 11px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--stroke);
+        background: rgba(255,255,255,.04);
+        color: var(--muted);
+      }
+      .pill strong{ color: var(--ink); font-weight: 700; }
+      .hint{ margin-top:10px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+      .tooltip{
+        position: fixed;
+        min-width: 220px;
+        max-width: 360px;
+        pointer-events:none;
+        transform: translate(12px, 12px);
+        padding: 10px 10px 9px;
+        border-radius: 14px;
+        border: 1px solid var(--stroke);
+        background: rgba(8, 10, 22, .78);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 14px 60px rgba(0,0,0,.55);
+        opacity: 0;
+        transition: opacity .12s ease;
+      }
+      .tooltip h3{
+        margin:0 0 4px;
+        font-size: 13px;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      }
+      .tooltip p{ margin:0; color: var(--muted); font-size: 11px; line-height: 1.35; }
+      .badge{
+        display:inline-block;
+        margin-top: 8px;
+        font-size: 10px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--stroke);
+        color: var(--ink);
+        background: rgba(255,255,255,.06);
+      }
+      .footer{
+        position: fixed; left: 16px; bottom: 14px;
+        color: rgba(234,240,255,.60);
+        font-size: 11px;
+        letter-spacing: .1px;
+        user-select:none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="hud">
+      <div class="card">
+        <h2 class="title">Multi‑Agent Orchestration — 3D Mental Model</h2>
+        <p class="subtitle">
+          A visual map of the orchestration loop: <strong>Intake → Plan → Dispatch → Tool Run → Review → Commit → Terminate</strong>.
+          This is meant to encode the key ideas (roles, tools, state, budgets, observability, security) into one spatial picture.
+        </p>
+        <div class="legend">
+          <div><span class="dot agent"></span>Agent node (planner/executor/reviewer/retriever)</div>
+          <div><span class="dot tool"></span>Tool node (APIs/DB/filesystem)</div>
+          <div><span class="dot guard"></span>Guard node (policy/validation/safety)</div>
+          <div><span class="dot state"></span>State node (memory/checkpoints/artifacts)</div>
+        </div>
+        <div class="hint">
+          Rotate: <span class="kbd">drag</span> · Zoom: <span class="kbd">wheel</span> · Focus: <span class="kbd">click</span> · Reset: <span class="kbd">R</span>
+        </div>
+      </div>
+
+      <div class="card right">
+        <h2 class="title" id="focusTitle">Focus: Orchestrator</h2>
+        <p class="subtitle" id="focusBody">
+          The orchestrator enforces budgets, termination rules, and the execution graph. Click nodes to explore how failures happen (loops, tool brittleness, state drift) and where controls live (schemas, allowlists, redaction, audit).
+        </p>
+        <div class="pillrow" id="focusPills"></div>
+      </div>
+    </div>
+
+    <div class="tooltip" id="tip">
+      <h3 id="tipTitle">Node</h3>
+      <p id="tipBody">Details</p>
+      <div class="badge" id="tipBadge">type</div>
+    </div>
+
+    <div class="footer">Tip: This diagram is intentionally opinionated—optimize for reliability before “more autonomy”.</div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://esm.sh/three@0.161.0"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+
+      // ---------- Scene ----------
+      const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setClearColor(0x000000, 0);
+      document.body.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x070812, 0.04);
+
+      const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 250);
+      camera.position.set(0, 6.5, 26);
+
+      // Lights
+      const key = new THREE.DirectionalLight(0xffffff, 1.1);
+      key.position.set(8, 12, 10);
+      scene.add(key);
+      const fill = new THREE.DirectionalLight(0x6fd3ff, 0.35);
+      fill.position.set(-10, 6, 6);
+      scene.add(fill);
+      const rim = new THREE.DirectionalLight(0x7cffd8, 0.28);
+      rim.position.set(0, -6, -10);
+      scene.add(rim);
+      scene.add(new THREE.AmbientLight(0xbad2ff, 0.10));
+
+      // Starfield backdrop (subtle)
+      const stars = new THREE.BufferGeometry();
+      const starCount = 1400;
+      const starPos = new Float32Array(starCount * 3);
+      for (let i = 0; i < starCount; i++) {
+        const r = 110 * Math.cbrt(Math.random());
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        starPos[i * 3 + 0] = r * Math.sin(phi) * Math.cos(theta);
+        starPos[i * 3 + 1] = r * Math.cos(phi);
+        starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+      }
+      stars.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
+      const starMat = new THREE.PointsMaterial({ color: 0x8aa1ff, size: 0.6, transparent: true, opacity: 0.08, depthWrite: false });
+      scene.add(new THREE.Points(stars, starMat));
+
+      // ---------- Data model ----------
+      const TYPES = {
+        core: { label: "core", color: 0x7cffd8 },
+        agent: { label: "agent", color: 0x6fd3ff },
+        tool: { label: "tool", color: 0xffcf5c },
+        guard: { label: "guard", color: 0xff6b8b },
+        state: { label: "state", color: 0xeaf0ff },
+      };
+
+      const nodes = [
+        // Core loop / orchestration
+        { id: "orchestrator", type: "core", title: "Orchestrator", body: "Schedules steps, enforces budgets, guarantees termination, persists artifacts and checkpoints.", pills: ["max_steps", "timeouts", "budgets", "checkpointing", "replay"] },
+        { id: "intake", type: "core", title: "Intake", body: "Normalize request, assign tenant/user, initialize budgets and policy context.", pills: ["tenant_id", "policy_context", "idempotency"] },
+        { id: "plan", type: "agent", title: "Planner Agent", body: "Creates a step plan: what to do, which agent should do it, and required tools.", pills: ["structured_plan", "delegation", "constraints"] },
+        { id: "dispatch", type: "core", title: "Dispatch", body: "Routes a step to an agent with scoped context and allowed tools.", pills: ["allowlist", "context_slice"] },
+        { id: "toolrun", type: "tool", title: "Tool Runner", body: "Executes tools with validation, timeouts, retries, schema checks, and sandboxing.", pills: ["schema_validation", "retries", "timeout_ms"] },
+        { id: "review", type: "agent", title: "Reviewer Agent", body: "Validates outputs, catches inconsistencies, enforces policies, blocks unsafe actions.", pills: ["sanity_checks", "policy_enforcement"] },
+        { id: "commit", type: "state", title: "Commit / Checkpoint", body: "Atomic state update: write artifacts, update memory, and checkpoint for resume/replay.", pills: ["atomic_update", "artifacts", "resume"] },
+        { id: "terminate", type: "core", title: "Terminate", body: "Stops on success, budget exceeded, unsafe action, or invalid output. Produces final status.", pills: ["success|failed", "budget_exceeded", "unsafe"] },
+
+        // Agents
+        { id: "executor", type: "agent", title: "Executor Agent", body: "Runs tool calls, transforms results, updates state. Should not plan long sequences.", pills: ["tool_call", "state_updates"] },
+        { id: "retriever", type: "agent", title: "Retriever Agent", body: "Queries knowledge sources: vector DB, SQL, docs, web. Focuses on retrieval quality.", pills: ["hybrid_search", "rerank", "freshness"] },
+
+        // Guards / security
+        { id: "policy", type: "guard", title: "Policy Engine", body: "Tool allowlists, approval gates, compliance rules, and action constraints.", pills: ["tool_allowlist", "approval_required"] },
+        { id: "redaction", type: "guard", title: "Redaction", body: "Removes secrets/PII from logs, traces, and artifacts. Prevents exfiltration.", pills: ["pii", "keys", "audit_safe"] },
+        { id: "schema", type: "guard", title: "Schema Validation", body: "Validates tool inputs/outputs. Prevents tool injection via unexpected fields.", pills: ["input_schema", "output_schema"] },
+
+        // State / memory / observability
+        { id: "shortmem", type: "state", title: "Short‑Term State", body: "In-run state: current step, tool outputs, context slice, temporary summaries.", pills: ["run_state", "context_bloat_control"] },
+        { id: "longmem", type: "state", title: "Long‑Term Memory", body: "Cross-run memory: preferences, prior tasks, knowledge. Must be governed.", pills: ["retention_policy", "versioning"] },
+        { id: "traces", type: "state", title: "Traces & Metrics", body: "Step-by-step traces and metrics: p95 latency, cost per task, tool error rates.", pills: ["p95_latency", "cost", "success_rate"] },
+
+        // Budget nodes (visual anchors)
+        { id: "budgets", type: "state", title: "Budgets", body: "Token/time/tool-call/cost budgets. Prevents infinite loops and cost explosions.", pills: ["tokens", "time", "tool_calls", "usd"] },
+      ];
+
+      const edges = [
+        ["intake", "orchestrator"],
+        ["orchestrator", "plan"],
+        ["plan", "dispatch"],
+        ["dispatch", "executor"],
+        ["dispatch", "retriever"],
+        ["executor", "toolrun"],
+        ["retriever", "toolrun"],
+        ["toolrun", "review"],
+        ["review", "commit"],
+        ["commit", "orchestrator"],
+        ["orchestrator", "terminate"],
+
+        // Guards
+        ["policy", "dispatch"],
+        ["schema", "toolrun"],
+        ["redaction", "traces"],
+        ["redaction", "commit"],
+        ["policy", "review"],
+
+        // State
+        ["shortmem", "orchestrator"],
+        ["longmem", "orchestrator"],
+        ["traces", "orchestrator"],
+        ["budgets", "orchestrator"],
+      ];
+
+      // Pre-position nodes in a memorable 3D "spine + satellites" layout.
+      const pos = {
+        intake:    new THREE.Vector3(-12,  3.2,  0),
+        orchestrator: new THREE.Vector3(-5.0,  0.6,  0),
+        plan:      new THREE.Vector3( 1.5,  3.0, -2.0),
+        dispatch:  new THREE.Vector3( 5.8,  1.2, -0.5),
+        executor:  new THREE.Vector3( 11.0,  2.8,  2.0),
+        retriever: new THREE.Vector3( 11.2, -0.8, -3.2),
+        toolrun:   new THREE.Vector3( 15.4,  0.8, -0.2),
+        review:    new THREE.Vector3( 12.2, -3.4,  2.4),
+        commit:    new THREE.Vector3( 5.7, -2.8,  4.2),
+        terminate: new THREE.Vector3(-0.6, -3.4, -5.0),
+
+        policy:    new THREE.Vector3( 4.0,  5.6,  2.4),
+        schema:    new THREE.Vector3( 17.8,  3.8,  2.8),
+        redaction: new THREE.Vector3( 0.2, -6.0,  2.4),
+
+        shortmem:  new THREE.Vector3(-4.2, -4.2,  5.6),
+        longmem:   new THREE.Vector3(-9.0, -3.2,  6.5),
+        traces:    new THREE.Vector3(-1.0, -6.2,  0.4),
+        budgets:   new THREE.Vector3(-8.8,  2.2, -5.6),
+      };
+
+      // ---------- Meshes ----------
+      const group = new THREE.Group();
+      scene.add(group);
+
+      const geo = new THREE.IcosahedronGeometry(1, 2);
+      const outlineGeo = new THREE.IcosahedronGeometry(1.08, 2);
+
+      function makeMaterial(hex, emissive=0x000000) {
+        return new THREE.MeshStandardMaterial({
+          color: hex,
+          roughness: 0.35,
+          metalness: 0.15,
+          emissive,
+          emissiveIntensity: 0.20,
+        });
+      }
+
+      function makeOutline() {
+        return new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.08, depthWrite: false });
+      }
+
+      const meshesById = new Map();
+      const dataByMesh = new Map();
+
+      for (const n of nodes) {
+        const t = TYPES[n.type];
+        const mat = makeMaterial(t.color, t.color);
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(pos[n.id] ?? new THREE.Vector3((Math.random()-0.5)*14, (Math.random()-0.5)*10, (Math.random()-0.5)*10));
+        mesh.userData = { id: n.id };
+
+        // A subtle outline shell.
+        const outline = new THREE.Mesh(outlineGeo, makeOutline());
+        outline.position.copy(mesh.position);
+        outline.userData = { outlineFor: n.id };
+
+        // Size encoding: core nodes slightly larger.
+        const s = (n.type === "core") ? 1.25 : (n.type === "tool") ? 1.15 : 1.05;
+        mesh.scale.setScalar(s);
+        outline.scale.setScalar(s);
+
+        group.add(mesh);
+        group.add(outline);
+        meshesById.set(n.id, mesh);
+        dataByMesh.set(mesh.uuid, n);
+      }
+
+      // Edges: glowing lines
+      const edgeMat = new THREE.LineBasicMaterial({ color: 0x88a1ff, transparent: true, opacity: 0.22 });
+      const edgeMatStrong = new THREE.LineBasicMaterial({ color: 0x7cffd8, transparent: true, opacity: 0.35 });
+
+      const edgeLines = [];
+      for (const [a, b] of edges) {
+        const A = meshesById.get(a)?.position;
+        const B = meshesById.get(b)?.position;
+        if (!A || !B) continue;
+        const g = new THREE.BufferGeometry().setFromPoints([A, B]);
+        const mat = (a === "orchestrator" || b === "orchestrator") ? edgeMatStrong : edgeMat;
+        const line = new THREE.Line(g, mat);
+        group.add(line);
+        edgeLines.push(line);
+      }
+
+      // ---------- Simple orbit controls (no external dependency) ----------
+      let isDown = false;
+      let lastX = 0, lastY = 0;
+      let yaw = 0.0, pitch = -0.12;
+      let radius = 26;
+      const target = new THREE.Vector3(4, 0.2, 0);
+
+      function updateCamera() {
+        const x = target.x + radius * Math.cos(pitch) * Math.sin(yaw);
+        const y = target.y + radius * Math.sin(pitch);
+        const z = target.z + radius * Math.cos(pitch) * Math.cos(yaw);
+        camera.position.set(x, y, z);
+        camera.lookAt(target);
+      }
+      updateCamera();
+
+      window.addEventListener("mousedown", (e) => {
+        isDown = true;
+        lastX = e.clientX; lastY = e.clientY;
+      });
+      window.addEventListener("mouseup", () => { isDown = false; });
+      window.addEventListener("mousemove", (e) => {
+        if (!isDown) return;
+        const dx = e.clientX - lastX;
+        const dy = e.clientY - lastY;
+        lastX = e.clientX; lastY = e.clientY;
+        yaw -= dx * 0.005;
+        pitch -= dy * 0.005;
+        pitch = Math.max(-1.25, Math.min(1.05, pitch));
+        updateCamera();
+      }, { passive: true });
+
+      window.addEventListener("wheel", (e) => {
+        radius *= (e.deltaY > 0) ? 1.06 : 0.94;
+        radius = Math.max(10, Math.min(60, radius));
+        updateCamera();
+      }, { passive: true });
+
+      // Reset
+      window.addEventListener("keydown", (e) => {
+        if (e.key.toLowerCase() === "r") {
+          yaw = 0.0; pitch = -0.12; radius = 26;
+          target.set(4, 0.2, 0);
+          setFocus("orchestrator");
+          updateCamera();
+        }
+      });
+
+      // ---------- Interaction / tooltip ----------
+      const ray = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+      let hovered = null;
+      let focusedId = "orchestrator";
+
+      const tip = document.getElementById("tip");
+      const tipTitle = document.getElementById("tipTitle");
+      const tipBody = document.getElementById("tipBody");
+      const tipBadge = document.getElementById("tipBadge");
+
+      const focusTitle = document.getElementById("focusTitle");
+      const focusBody = document.getElementById("focusBody");
+      const focusPills = document.getElementById("focusPills");
+
+      function setFocus(id) {
+        focusedId = id;
+        const n = nodes.find(x => x.id === id) ?? nodes.find(x => x.id === "orchestrator");
+        focusTitle.textContent = `Focus: ${n.title}`;
+        focusBody.textContent = n.body;
+        focusPills.innerHTML = "";
+        for (const p of (n.pills ?? [])) {
+          const el = document.createElement("div");
+          el.className = "pill";
+          el.innerHTML = `<strong>•</strong> ${p}`;
+          focusPills.appendChild(el);
+        }
+      }
+      setFocus("orchestrator");
+
+      function onPointerMove(e) {
+        mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+        // Tooltip placement
+        tip.style.left = `${e.clientX}px`;
+        tip.style.top = `${e.clientY}px`;
+
+        ray.setFromCamera(mouse, camera);
+        const intersects = ray.intersectObjects([...meshesById.values()], false);
+        if (intersects.length) {
+          const m = intersects[0].object;
+          const n = dataByMesh.get(m.uuid);
+          hovered = m;
+          tipTitle.textContent = n.title;
+          tipBody.textContent = n.body;
+          tipBadge.textContent = TYPES[n.type].label;
+          tip.style.opacity = "1";
+        } else {
+          hovered = null;
+          tip.style.opacity = "0";
+        }
+      }
+      window.addEventListener("mousemove", onPointerMove, { passive: true });
+
+      window.addEventListener("click", () => {
+        if (!hovered) return;
+        const n = dataByMesh.get(hovered.uuid);
+        if (!n) return;
+        setFocus(n.id);
+
+        // Ease camera target toward focused node.
+        const p = meshesById.get(n.id).position;
+        target.lerp(p, 0.55);
+        updateCamera();
+      });
+
+      // ---------- Animation ----------
+      const clock = new THREE.Clock();
+      function tick() {
+        const t = clock.getElapsedTime();
+
+        // Subtle “living system” motion: nodes breathe and drift microscopically.
+        for (const n of nodes) {
+          const m = meshesById.get(n.id);
+          if (!m) continue;
+          const base = pos[n.id];
+          const wob = (n.type === "tool") ? 0.10 : 0.07;
+          m.position.x = base.x + Math.sin(t * 0.7 + base.z * 0.12) * wob;
+          m.position.y = base.y + Math.cos(t * 0.6 + base.x * 0.10) * wob;
+          m.position.z = base.z + Math.sin(t * 0.5 + base.y * 0.14) * wob;
+
+          // rotation adds a “3D mnemonic” feel
+          m.rotation.x += 0.002;
+          m.rotation.y += 0.003;
+        }
+
+        // Update outlines positions to match meshes.
+        for (const obj of group.children) {
+          if (obj.userData?.outlineFor) {
+            const id = obj.userData.outlineFor;
+            const m = meshesById.get(id);
+            if (m) obj.position.copy(m.position);
+          }
+        }
+
+        // Update edges each frame (positions are animated).
+        for (const line of edgeLines) {
+          const arr = line.geometry.attributes.position.array;
+          const p0 = line.geometry._points?.[0]; // not used
+          // Reconstruct points by reading current endpoints via stored geometry points not available; rebuild from edge list is simpler.
+        }
+        // Rebuild edge geometries (cheap at this scale).
+        for (let i = 0; i < edgeLines.length; i++) {
+          const line = edgeLines[i];
+          // We stored edges separately, so reconstruct by reading the order of edges.
+          const [a, b] = edges[i];
+          const A = meshesById.get(a)?.position;
+          const B = meshesById.get(b)?.position;
+          if (!A || !B) continue;
+          const attr = line.geometry.attributes.position;
+          attr.setXYZ(0, A.x, A.y, A.z);
+          attr.setXYZ(1, B.x, B.y, B.z);
+          attr.needsUpdate = true;
+        }
+
+        // Highlight focused + hovered nodes
+        for (const n of nodes) {
+          const m = meshesById.get(n.id);
+          const isFocused = (n.id === focusedId);
+          const isHovered = hovered && dataByMesh.get(hovered.uuid)?.id === n.id;
+          const targetEmissive = isFocused ? 0.60 : isHovered ? 0.45 : 0.20;
+          m.material.emissiveIntensity += (targetEmissive - m.material.emissiveIntensity) * 0.08;
+        }
+
+        renderer.render(scene, camera);
+        requestAnimationFrame(tick);
+      }
+      tick();
+
+      // Resize
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    </script>
+  </body>
+</html>
+

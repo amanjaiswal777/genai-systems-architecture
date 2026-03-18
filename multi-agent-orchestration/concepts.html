@@ -1,0 +1,1013 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Multi‑Agent Orchestration — Concepts & System Walkthrough</title>
+    <meta name="description" content="A scrollable, concept-first walkthrough of multi-agent orchestration: roles, tools, state, budgets, observability, failure modes, security, and execution graphs." />
+    <style>
+      :root{
+        --bg0:#070812;
+        --bg1:#0b1230;
+        --ink:#eaf0ff;
+        --muted:#a8b3d6;
+        --accent:#7cffd8;
+        --warn:#ffcf5c;
+        --bad:#ff6b8b;
+        --panel: rgba(12, 16, 38, .70);
+        --panel2: rgba(8, 10, 22, .60);
+        --stroke: rgba(255,255,255,.10);
+        --stroke2: rgba(255,255,255,.16);
+        --shadow: 0 24px 90px rgba(0,0,0,.45);
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+      }
+
+      html, body { height: 100%; margin: 0; background: radial-gradient(1200px 800px at 20% 10%, #18235a 0%, var(--bg0) 55%, #05050b 100%); color: var(--ink); }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+
+      .progress{
+        position: fixed;
+        inset: 0 0 auto 0;
+        height: 3px;
+        background: rgba(255,255,255,.06);
+        z-index: 999;
+      }
+      .progress > div{
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, rgba(124,255,216,.9) 0%, rgba(111,211,255,.9) 35%, rgba(255,207,92,.85) 70%, rgba(255,107,139,.85) 100%);
+        box-shadow: 0 0 22px rgba(124,255,216,.35);
+        transition: width .06s linear;
+      }
+
+      .grid{
+        display:grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 18px;
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 26px 18px 80px;
+      }
+
+      header.hero{
+        grid-column: 1 / -1;
+        background: linear-gradient(135deg, rgba(124,255,216,.10) 0%, rgba(111,211,255,.08) 45%, rgba(255,107,139,.06) 100%);
+        border: 1px solid var(--stroke);
+        border-radius: 20px;
+        padding: 18px 18px 16px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+        position: relative;
+        overflow: hidden;
+      }
+      header.hero:before{
+        content:"";
+        position:absolute;
+        inset:-140px -240px auto auto;
+        width: 560px;
+        height: 560px;
+        background: radial-gradient(circle at 30% 30%, rgba(124,255,216,.26) 0%, rgba(111,211,255,.16) 35%, rgba(255,107,139,.00) 70%);
+        filter: blur(2px);
+        transform: rotate(16deg);
+        opacity: .9;
+        pointer-events:none;
+      }
+      header.hero:after{
+        content:"";
+        position:absolute;
+        inset:auto auto -240px -240px;
+        width: 560px;
+        height: 560px;
+        background: radial-gradient(circle at 30% 30%, rgba(255,207,92,.18) 0%, rgba(111,211,255,.08) 40%, rgba(124,255,216,.00) 70%);
+        filter: blur(3px);
+        opacity: .8;
+        pointer-events:none;
+      }
+
+      h1{
+        margin: 0 0 6px;
+        font-family: var(--serif);
+        letter-spacing: .2px;
+        font-size: 22px;
+      }
+      .sub{
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-family: var(--sans);
+        font-size: 13px;
+        line-height: 1.45;
+        max-width: 90ch;
+      }
+      .chips{ display:flex; flex-wrap:wrap; gap:8px; margin-top: 10px; }
+      .chip{
+        font-family: var(--sans);
+        font-size: 11px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--stroke);
+        background: rgba(255,255,255,.04);
+        color: var(--muted);
+      }
+      .chip strong{ color: var(--ink); font-weight: 700; }
+
+      nav.toc{
+        position: sticky;
+        top: 16px;
+        align-self: start;
+        background: var(--panel);
+        border: 1px solid var(--stroke);
+        border-radius: 18px;
+        padding: 14px 14px 10px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+        overflow: hidden;
+      }
+      nav.toc h2{
+        margin: 0 0 8px;
+        font-family: var(--sans);
+        font-size: 12px;
+        letter-spacing: .22em;
+        text-transform: uppercase;
+        color: rgba(234,240,255,.78);
+      }
+      nav.toc a{
+        display:block;
+        padding: 8px 10px;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        color: var(--muted);
+        font-family: var(--sans);
+        font-size: 12px;
+        line-height: 1.25;
+        margin: 6px 0;
+      }
+      nav.toc a.active{
+        background: rgba(124,255,216,.10);
+        border-color: rgba(124,255,216,.20);
+        color: var(--ink);
+      }
+
+      .panel3d{
+        position: sticky;
+        top: 16px;
+        align-self: start;
+        background: radial-gradient(800px 500px at 40% 10%, rgba(111,211,255,.14) 0%, rgba(12,16,38,.72) 46%, rgba(8,10,22,.70) 100%);
+        border: 1px solid var(--stroke);
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(8px);
+      }
+      .panel3d header{
+        display:flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 12px 10px;
+        border-bottom: 1px solid rgba(255,255,255,.08);
+      }
+      .panel3d header .t{
+        font-family: var(--sans);
+        font-size: 12px;
+        color: rgba(234,240,255,.82);
+      }
+      .panel3d header .k{
+        font-family: var(--mono);
+        font-size: 11px;
+        color: rgba(234,240,255,.65);
+      }
+      #canvasWrap{ height: 360px; }
+      canvas { display:block; width:100%; height:100%; }
+      .focus{
+        padding: 12px 12px 12px;
+      }
+      .focus h3{
+        margin:0 0 6px;
+        font-family: var(--sans);
+        font-size: 14px;
+      }
+      .focus p{
+        margin:0;
+        color: var(--muted);
+        font-family: var(--sans);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .pills{ display:flex; flex-wrap: wrap; gap:8px; margin-top: 10px; }
+      .pill{
+        font-family: var(--mono);
+        font-size: 11px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--stroke);
+        background: rgba(255,255,255,.04);
+        color: rgba(234,240,255,.80);
+      }
+
+      main{
+        display:flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      section.card{
+        background: var(--panel);
+        border: 1px solid var(--stroke);
+        border-radius: 18px;
+        padding: 16px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px);
+        position: relative;
+        overflow: hidden;
+        transform: translateY(0);
+        transition: transform .18s ease, border-color .18s ease, background .18s ease;
+      }
+      section.card:hover{
+        transform: translateY(-2px);
+        border-color: rgba(255,255,255,.14);
+      }
+      section.card:before{
+        content:"";
+        position:absolute;
+        inset: -1px auto -1px -1px;
+        width: 6px;
+        border-radius: 18px 0 0 18px;
+        background: linear-gradient(180deg, rgba(124,255,216,.9), rgba(111,211,255,.8));
+        opacity: .22;
+      }
+      section.card[data-tint="aqua"]:before{ opacity: .35; background: linear-gradient(180deg, rgba(124,255,216,.95), rgba(111,211,255,.85)); }
+      section.card[data-tint="gold"]:before{ opacity: .38; background: linear-gradient(180deg, rgba(255,207,92,.95), rgba(124,255,216,.55)); }
+      section.card[data-tint="rose"]:before{ opacity: .38; background: linear-gradient(180deg, rgba(255,107,139,.95), rgba(200,107,255,.70)); }
+      section.card[data-tint="ice"]:before{ opacity: .30; background: linear-gradient(180deg, rgba(234,240,255,.85), rgba(111,211,255,.55)); }
+      section.card[data-tint="aqua"]{
+        background: linear-gradient(180deg, rgba(124,255,216,.08) 0%, var(--panel) 32%, rgba(111,211,255,.04) 100%);
+      }
+      section.card[data-tint="gold"]{
+        background: linear-gradient(180deg, rgba(255,207,92,.07) 0%, var(--panel) 36%, rgba(124,255,216,.03) 100%);
+      }
+      section.card[data-tint="rose"]{
+        background: linear-gradient(180deg, rgba(255,107,139,.06) 0%, var(--panel) 34%, rgba(200,107,255,.03) 100%);
+      }
+      section.card[data-tint="ice"]{
+        background: linear-gradient(180deg, rgba(234,240,255,.06) 0%, var(--panel) 36%, rgba(111,211,255,.03) 100%);
+      }
+      section.card h2{
+        margin: 0 0 8px;
+        font-family: var(--serif);
+        font-size: 18px;
+        letter-spacing: .2px;
+      }
+      section.card .why{
+        margin: 0 0 12px;
+        color: rgba(234,240,255,.78);
+        font-family: var(--sans);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .split{
+        display:grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        align-items:start;
+      }
+      .box{
+        background: var(--panel2);
+        border: 1px solid rgba(255,255,255,.08);
+        border-radius: 14px;
+        padding: 12px;
+      }
+      .box h4{
+        margin:0 0 6px;
+        font-family: var(--sans);
+        font-size: 12px;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+        color: rgba(234,240,255,.70);
+      }
+      pre{
+        margin: 0;
+        padding: 12px;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,.10);
+        background: linear-gradient(180deg, rgba(0,0,0,.38), rgba(0,0,0,.26));
+        color: rgba(234,240,255,.86);
+        overflow:auto;
+        font-family: var(--mono);
+        font-size: 11px;
+        line-height: 1.45;
+      }
+      details{
+        margin-top: 10px;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,.10);
+        background: rgba(255,255,255,.03);
+        padding: 10px 10px 8px;
+      }
+      summary{
+        cursor: pointer;
+        user-select: none;
+        font-family: var(--sans);
+        font-size: 12px;
+        color: rgba(234,240,255,.78);
+        list-style: none;
+      }
+      summary::-webkit-details-marker{ display:none; }
+      summary:before{
+        content:"▸";
+        display:inline-block;
+        margin-right: 8px;
+        color: rgba(124,255,216,.85);
+        transform: translateY(-1px);
+      }
+      details[open] summary:before{ content:"▾"; }
+      .diagram{
+        margin-top: 10px;
+        border-radius: 16px;
+        border: 1px solid rgba(255,255,255,.10);
+        background: radial-gradient(700px 240px at 30% 20%, rgba(124,255,216,.14) 0%, rgba(111,211,255,.06) 40%, rgba(0,0,0,.22) 70%);
+        padding: 12px;
+      }
+      .diagram svg{ width: 100%; height: auto; display:block; }
+      code{ font-family: var(--mono); }
+      ul{
+        margin: 8px 0 0 18px;
+        color: rgba(234,240,255,.80);
+        font-family: var(--sans);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .callout{
+        margin-top: 12px;
+        border-radius: 14px;
+        border: 1px solid rgba(124,255,216,.18);
+        background: rgba(124,255,216,.08);
+        padding: 12px;
+        color: rgba(234,240,255,.86);
+        font-family: var(--sans);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .mini{
+        color: rgba(234,240,255,.62);
+        font-family: var(--sans);
+        font-size: 12px;
+        margin-top: 10px;
+      }
+
+      @media (max-width: 980px){
+        .grid{ grid-template-columns: 1fr; }
+        nav.toc{ position: relative; top: 0; }
+        .panel3d{ position: relative; top: 0; }
+        #canvasWrap{ height: 320px; }
+        .split{ grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="progress" aria-hidden="true"><div id="prog"></div></div>
+    <div class="grid">
+      <header class="hero">
+        <h1>Multi‑Agent Orchestration — Concepts & System Walkthrough</h1>
+        <p class="sub">
+          Scroll to learn: this page is a concept-first walkthrough of multi-agent orchestration.
+          Each section explains a key idea with a concrete example (roles, tools, state, budgets, observability, failure modes, security, and the execution graph).
+          The 3D panel on the right is a mnemonic — it highlights the component you’re reading about.
+        </p>
+        <div class="chips">
+          <div class="chip"><strong>Goal</strong>: reliable agents, not demos</div>
+          <div class="chip"><strong>Design axis</strong>: budgets + validation + traces</div>
+          <div class="chip"><strong>Output</strong>: reproducible runs + eval harness</div>
+        </div>
+        <div class="mini">
+          Source doc: <a href="./KEY_CONCEPTS_WITH_EXAMPLES.md">KEY_CONCEPTS_WITH_EXAMPLES.md</a>
+          · Visual-only model: <a href="./visualization.html">visualization.html</a>
+        </div>
+      </header>
+
+      <main>
+        <section class="card concept" id="c1" data-focus="orchestrator" data-tint="aqua">
+          <h2>1) Multi‑Agent Systems: the core idea</h2>
+          <p class="why">
+            The core shift is **teamwork**: multiple specialized agents behave like a production team (planning, execution, review, retrieval) instead of one “do everything” agent.
+          </p>
+          <div class="diagram" aria-label="Team roles diagram">
+            <svg viewBox="0 0 920 190" role="img">
+              <defs>
+                <linearGradient id="gA" x1="0" x2="1">
+                  <stop offset="0" stop-color="rgba(124,255,216,.85)"/>
+                  <stop offset="1" stop-color="rgba(111,211,255,.85)"/>
+                </linearGradient>
+                <linearGradient id="gB" x1="0" x2="1">
+                  <stop offset="0" stop-color="rgba(255,207,92,.85)"/>
+                  <stop offset="1" stop-color="rgba(124,255,216,.55)"/>
+                </linearGradient>
+              </defs>
+              <rect x="14" y="16" width="892" height="158" rx="18" fill="rgba(0,0,0,.18)" stroke="rgba(255,255,255,.10)"/>
+              <circle cx="150" cy="95" r="36" fill="url(#gA)" opacity=".95"/>
+              <text x="150" y="101" text-anchor="middle" font-family="ui-monospace" font-size="12" fill="rgba(7,8,18,.95)">Planner</text>
+              <circle cx="380" cy="95" r="36" fill="url(#gB)" opacity=".95"/>
+              <text x="380" y="101" text-anchor="middle" font-family="ui-monospace" font-size="12" fill="rgba(7,8,18,.95)">Executor</text>
+              <circle cx="610" cy="95" r="36" fill="rgba(255,107,139,.85)" opacity=".95"/>
+              <text x="610" y="101" text-anchor="middle" font-family="ui-monospace" font-size="12" fill="rgba(7,8,18,.95)">Reviewer</text>
+              <circle cx="780" cy="95" r="36" fill="rgba(234,240,255,.78)" opacity=".95"/>
+              <text x="780" y="101" text-anchor="middle" font-family="ui-monospace" font-size="12" fill="rgba(7,8,18,.95)">Retriever</text>
+              <path d="M186 95H344" stroke="rgba(234,240,255,.35)" stroke-width="3" />
+              <path d="M416 95H574" stroke="rgba(234,240,255,.35)" stroke-width="3" />
+              <path d="M646 95H744" stroke="rgba(234,240,255,.35)" stroke-width="3" />
+              <text x="150" y="148" text-anchor="middle" font-family="ui-sans-serif" font-size="11" fill="rgba(234,240,255,.70)">plans steps</text>
+              <text x="380" y="148" text-anchor="middle" font-family="ui-sans-serif" font-size="11" fill="rgba(234,240,255,.70)">runs tools</text>
+              <text x="610" y="148" text-anchor="middle" font-family="ui-sans-serif" font-size="11" fill="rgba(234,240,255,.70)">validates</text>
+              <text x="780" y="148" text-anchor="middle" font-family="ui-sans-serif" font-size="11" fill="rgba(234,240,255,.70)">retrieves</text>
+            </svg>
+          </div>
+          <div class="split">
+            <div class="box">
+              <h4>Example team</h4>
+              <ul>
+                <li><strong>Planner</strong>: decomposes goals into steps</li>
+                <li><strong>Executor</strong>: runs tools and transforms results</li>
+                <li><strong>Reviewer</strong>: validates, blocks unsafe actions</li>
+                <li><strong>Retriever</strong>: queries corpora/DBs/web</li>
+              </ul>
+            </div>
+            <div class="box">
+              <h4>Why this matters</h4>
+              <ul>
+                <li>Separates planning vs execution vs validation</li>
+                <li>Reduces hallucinated tool outputs</li>
+                <li>Enables guardrails + budgets per role</li>
+              </ul>
+            </div>
+          </div>
+          <div class="callout">
+            Architect mindset: you are designing **roles, contracts, and failure recovery** — not prompts.
+          </div>
+        </section>
+
+        <section class="card concept" id="c2" data-focus="plan" data-tint="ice">
+          <h2>2) Role‑Based Agents (specialization)</h2>
+          <p class="why">
+            Role separation prevents one agent from doing long reasoning and fragile execution in the same loop.
+          </p>
+          <pre><code>User request: “Find and summarize recent papers on quantum computing”
+
+Planner:
+  1) Retriever → search academic sources
+  2) Executor  → download top papers
+  3) Executor  → extract key findings
+  4) Reviewer  → verify citations + sanity-check claims</code></pre>
+          <div class="callout">
+            Production trick: keep each role’s context scoped. Give the executor only what it needs to execute the current step.
+          </div>
+        </section>
+
+        <section class="card concept" id="c3" data-focus="toolrun" data-tint="gold">
+          <h2>3) Tool Use with Validation</h2>
+          <p class="why">
+            Tools fail. Your system must be resilient: validate inputs, enforce timeouts, validate outputs, retry with backoff, and fall back safely.
+          </p>
+          <div class="split">
+            <div class="box">
+              <h4>Bad (no validation)</h4>
+              <pre><code>def get_weather(city):
+  return api.call(city)  # may timeout / return errors / wrong schema</code></pre>
+            </div>
+            <div class="box">
+              <h4>Good (validation + timeout)</h4>
+              <details>
+                <summary>Show robust wrapper example</summary>
+                <pre><code>def get_weather(city: str) -> dict:
+  if not isinstance(city, str) or len(city) &lt; 2:
+    raise ValueError("Invalid city")
+  try:
+    resp = api.call(city, timeout=5)
+  except Timeout:
+    return {"error":"timeout","retry":True}
+  if "temp" not in resp or "conditions" not in resp:
+    raise SchemaError("Missing fields")
+  return resp</code></pre>
+              </details>
+            </div>
+          </div>
+          <div class="callout">
+            Tool reliability is where most agent demos die. Make tool wrappers boring, strict, and well-tested.
+          </div>
+        </section>
+
+        <section class="card concept" id="c4" data-focus="shortmem" data-tint="aqua">
+          <h2>4) Stateful Execution (memory & context)</h2>
+          <p class="why">
+            Multi-step work needs state, and production needs resume/replay. Use short-term run state plus governed long-term memory.
+          </p>
+          <div class="split">
+            <div class="box">
+              <h4>Short-term (in-run)</h4>
+              <pre><code>{
+  "current_step": 3,
+  "tool_results": { "search_flights": {"found": 5} },
+  "context": "User prefers morning flights"
+}</code></pre>
+            </div>
+            <div class="box">
+              <h4>Long-term (cross-run)</h4>
+              <pre><code>{
+  "user_preferences": {
+    "preferred_airlines": ["Delta","United"],
+    "last_booking": "2026-01-15"
+  }
+}</code></pre>
+            </div>
+          </div>
+          <div class="callout">
+            Memory without governance creates drift. Treat memory like a database: schemas, retention, and versioning.
+          </div>
+        </section>
+
+        <section class="card concept" id="c5" data-focus="budgets" data-tint="gold">
+          <h2>5) Budgets & termination guarantees</h2>
+          <p class="why">
+            Without explicit budgets, agents can loop forever. Budgets are how you guarantee termination and control cost.
+          </p>
+          <ul>
+            <li><strong>Token budget</strong> across all model calls</li>
+            <li><strong>Time budget</strong> per run (wall-clock)</li>
+            <li><strong>Tool-call budget</strong> per run</li>
+            <li><strong>Cost budget</strong> (USD)</li>
+            <li><strong>Clarification cap</strong> to prevent dialogue loops</li>
+          </ul>
+          <pre><code># Tool call budget (sketch)
+max_tool_calls = 20
+tool_calls = 0
+def call_tool(name, args):
+  global tool_calls
+  if tool_calls &gt;= max_tool_calls:
+    terminate("tool_budget_exceeded")
+  tool_calls += 1
+  return execute_tool(name, args)</code></pre>
+        </section>
+
+        <section class="card concept" id="c6" data-focus="traces" data-tint="ice">
+          <h2>6) Observability (tracing & logging)</h2>
+          <p class="why">
+            Production debugging requires step-by-step traces: what agent decided, which tool ran, inputs/outputs, latency, and cost.
+          </p>
+          <details open>
+            <summary>Example trace shape</summary>
+            <pre><code>{
+  "run_id":"run_abc123",
+  "steps":[
+    {"step_id":1,"agent":"planner","action":"create_plan","duration_ms":450},
+    {"step_id":2,"agent":"executor","action":"tool_call","tool":"db_query","status":"success"}
+  ],
+  "final_status":"success",
+  "total_duration_ms":1739
+}</code></pre>
+          </details>
+          <div class="callout">
+            If you can’t replay a failure deterministically, you don’t control the system.
+          </div>
+        </section>
+
+        <section class="card concept" id="c7" data-focus="review" data-tint="rose">
+          <h2>7) Failure modes (and how systems recover)</h2>
+          <p class="why">
+            The most common failure modes are non-termination loops, state drift, and tool brittleness. Your orchestrator must handle them explicitly.
+          </p>
+          <div class="split">
+            <div class="box">
+              <h4>Non‑termination loop</h4>
+              <pre><code>Planner: fetch user data
+Executor: need clarification
+Planner: fetch user data
+Executor: need clarification
+...</code></pre>
+            </div>
+            <div class="box">
+              <h4>Fix</h4>
+              <ul>
+                <li>max clarification rounds</li>
+                <li>max retries per tool</li>
+                <li>hard max steps per run</li>
+              </ul>
+            </div>
+          </div>
+          <div class="callout">
+            Reliability is “boring engineering”: caps, timeouts, schemas, checkpoints, and fallbacks.
+          </div>
+        </section>
+
+        <section class="card concept" id="c8" data-focus="policy" data-tint="rose">
+          <h2>8) Security threats (prompt injection, tool injection, exfiltration)</h2>
+          <p class="why">
+            Assume inputs and tool outputs may be malicious. Security is about enforcing contracts and policies — not trusting text.
+          </p>
+          <ul>
+            <li><strong>Prompt injection</strong>: user tries to override policies</li>
+            <li><strong>Tool injection</strong>: tool output includes “instructions” fields</li>
+            <li><strong>Exfiltration</strong>: sensitive data leaking via tools/logs</li>
+          </ul>
+          <div class="split">
+            <div class="box">
+              <h4>Defense pattern</h4>
+              <ul>
+                <li>tool allowlists per agent/run</li>
+                <li>schema-based parsing (ignore extra fields)</li>
+                <li>redaction before logs/artifacts</li>
+                <li>approval gates for destructive tools</li>
+              </ul>
+            </div>
+            <div class="box">
+              <h4>Where it lives</h4>
+              <ul>
+                <li><code>policies/</code> (allow/deny)</li>
+                <li><code>schemas/</code> (input/output validation)</li>
+                <li><code>redaction/</code> (log safety)</li>
+                <li><code>audit/</code> (who/what/when)</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="card concept" id="c9" data-focus="orchestrator" data-tint="aqua">
+          <h2>9) Execution graph (DAG / state machine)</h2>
+          <p class="why">
+            Use an explicit execution graph: it makes retries, budgets, and replay deterministic and debuggable.
+          </p>
+          <pre><code>Intake → Plan → Dispatch → Tool Run → Review → Commit → Terminate</code></pre>
+          <div class="callout">
+            If your orchestration is “just recursive prompting”, you can’t guarantee termination or safety.
+          </div>
+        </section>
+
+        <section class="card concept" id="c10" data-focus="schema" data-tint="ice">
+          <h2>10) Contracts (Tool schema + Agent interface)</h2>
+          <p class="why">
+            Contracts reduce ambiguity. Schema validation is your primary defense against brittle tools and injection via unexpected fields.
+          </p>
+          <div class="split">
+            <div class="box">
+              <h4>Tool contract</h4>
+              <ul>
+                <li>name + description</li>
+                <li>input_schema + output_schema</li>
+                <li>timeout + retry policy</li>
+                <li>side effects + safety level</li>
+              </ul>
+            </div>
+            <div class="box">
+              <h4>Agent contract</h4>
+              <ul>
+                <li>action: tool_call/delegate/finalize</li>
+                <li>structured tool payload</li>
+                <li>state updates (patches)</li>
+                <li>final artifacts/citations</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="card concept" id="c11" data-focus="commit" data-tint="gold">
+          <h2>11) Checkpointing (resume + replay)</h2>
+          <p class="why">
+            Checkpoints are how you resume after crashes and replay failures deterministically.
+          </p>
+          <ul>
+            <li>checkpoint after each step (atomic commit)</li>
+            <li>store tool IO and agent outputs as artifacts</li>
+            <li>support replay for regression testing</li>
+          </ul>
+        </section>
+
+        <section class="card concept" id="c12" data-focus="traces" data-tint="gold">
+          <h2>12) Evaluation harness (prove it works)</h2>
+          <p class="why">
+            Your system isn’t “production-ready” until you can measure reliability, cost, and quality over a task suite.
+          </p>
+          <ul>
+            <li>start with 20–50 tasks</li>
+            <li>run each task multiple times (stochasticity)</li>
+            <li>track success rate, p95 latency, cost, retries, safety catches</li>
+            <li>store results for comparisons between versions</li>
+          </ul>
+          <div class="callout">
+            Evaluation is not a report. It’s a guardrail that prevents regressions and keeps costs bounded.
+          </div>
+        </section>
+      </main>
+
+      <div>
+        <nav class="toc" id="toc">
+          <h2>On this page</h2>
+          <a href="#c1" data-focus="orchestrator">1) Core idea</a>
+          <a href="#c2" data-focus="plan">2) Role-based agents</a>
+          <a href="#c3" data-focus="toolrun">3) Tools + validation</a>
+          <a href="#c4" data-focus="shortmem">4) State + memory</a>
+          <a href="#c5" data-focus="budgets">5) Budgets + termination</a>
+          <a href="#c6" data-focus="traces">6) Observability</a>
+          <a href="#c7" data-focus="review">7) Failure modes</a>
+          <a href="#c8" data-focus="policy">8) Security</a>
+          <a href="#c9" data-focus="orchestrator">9) Execution graph</a>
+          <a href="#c10" data-focus="schema">10) Contracts</a>
+          <a href="#c11" data-focus="commit">11) Checkpointing</a>
+          <a href="#c12" data-focus="traces">12) Evaluation harness</a>
+        </nav>
+
+        <aside class="panel3d" aria-label="3D mental model panel">
+          <header>
+            <div class="t">3D mnemonic</div>
+            <div class="k">drag · wheel · click · R</div>
+          </header>
+          <div id="canvasWrap"></div>
+          <div class="focus">
+            <h3 id="focusTitle">Focus: Orchestrator</h3>
+            <p id="focusBody">Scroll to a section — the 3D panel will highlight the component.</p>
+            <div class="pills" id="focusPills"></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://esm.sh/three@0.161.0"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import * as THREE from "three";
+
+      // --- 3D panel (mnemonic), updated by scroll ---
+      const wrap = document.getElementById("canvasWrap");
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+      wrap.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x070812, 0.06);
+
+      const camera = new THREE.PerspectiveCamera(55, wrap.clientWidth / wrap.clientHeight, 0.1, 250);
+      camera.position.set(0, 6, 22);
+
+      // Lights
+      const key = new THREE.DirectionalLight(0xffffff, 1.05);
+      key.position.set(8, 12, 10);
+      scene.add(key);
+      scene.add(new THREE.AmbientLight(0xbad2ff, 0.12));
+
+      const TYPES = {
+        core:  { label: "core",  color: 0x7cffd8 },
+        agent: { label: "agent", color: 0x6fd3ff },
+        tool:  { label: "tool",  color: 0xffcf5c },
+        guard: { label: "guard", color: 0xff6b8b },
+        state: { label: "state", color: 0xeaf0ff },
+      };
+
+      const nodes = [
+        { id: "orchestrator", type: "core",  title: "Orchestrator", body: "Schedules steps, enforces budgets, guarantees termination, persists artifacts.", pills: ["max_steps","timeouts","budgets","checkpointing","replay"] },
+        { id: "plan",         type: "agent", title: "Planner Agent", body: "Creates a step plan and assigns roles.", pills: ["structured_plan","delegation","constraints"] },
+        { id: "toolrun",      type: "tool",  title: "Tool Runner", body: "Executes tools with schema validation, timeouts, retries, sandboxing.", pills: ["schema_validation","retries","timeout_ms"] },
+        { id: "review",       type: "agent", title: "Reviewer Agent", body: "Validates outputs and blocks unsafe actions.", pills: ["sanity_checks","policy_enforcement"] },
+        { id: "commit",       type: "state", title: "Commit / Checkpoint", body: "Atomic state update + checkpoint for resume/replay.", pills: ["atomic_update","artifacts","resume"] },
+        { id: "policy",       type: "guard", title: "Policy Engine", body: "Tool allowlists and approval gates.", pills: ["tool_allowlist","approval_required"] },
+        { id: "schema",       type: "guard", title: "Schema Validation", body: "Validates tool IO, prevents injection via extra fields.", pills: ["input_schema","output_schema"] },
+        { id: "shortmem",     type: "state", title: "Short‑Term State", body: "In-run state and tool outputs.", pills: ["run_state","context_bloat_control"] },
+        { id: "budgets",      type: "state", title: "Budgets", body: "Token/time/tool-call/cost budgets.", pills: ["tokens","time","tool_calls","usd"] },
+        { id: "traces",       type: "state", title: "Traces & Metrics", body: "Structured logs + traces + metrics.", pills: ["p95_latency","cost","success_rate"] },
+      ];
+
+      const pos = {
+        orchestrator: new THREE.Vector3(-3.5,  0.2,  0.0),
+        plan:         new THREE.Vector3( 2.8,  2.4, -1.4),
+        toolrun:      new THREE.Vector3( 7.6,  0.6,  0.1),
+        review:       new THREE.Vector3( 3.4, -2.5,  2.2),
+        commit:       new THREE.Vector3(-1.2, -2.2,  3.8),
+        policy:       new THREE.Vector3( 0.8,  4.4,  2.2),
+        schema:       new THREE.Vector3( 9.0,  3.6,  2.4),
+        shortmem:     new THREE.Vector3(-4.2, -3.0,  5.2),
+        budgets:      new THREE.Vector3(-7.2,  2.4, -3.6),
+        traces:       new THREE.Vector3(-0.6, -4.8,  0.4),
+      };
+
+      const edges = [
+        ["orchestrator","plan"],
+        ["plan","toolrun"],
+        ["toolrun","review"],
+        ["review","commit"],
+        ["commit","orchestrator"],
+        ["policy","review"],
+        ["schema","toolrun"],
+        ["shortmem","orchestrator"],
+        ["budgets","orchestrator"],
+        ["traces","orchestrator"],
+      ];
+
+      const group = new THREE.Group();
+      scene.add(group);
+
+      const geo = new THREE.IcosahedronGeometry(1, 2);
+      const meshesById = new Map();
+      const dataByUuid = new Map();
+
+      function mat(hex){
+        return new THREE.MeshStandardMaterial({
+          color: hex, roughness: 0.35, metalness: 0.12,
+          emissive: hex, emissiveIntensity: 0.22
+        });
+      }
+
+      for (const n of nodes) {
+        const m = new THREE.Mesh(geo, mat(TYPES[n.type].color));
+        m.position.copy(pos[n.id]);
+        m.userData = { id: n.id };
+        const s = n.type === "core" ? 1.18 : n.type === "tool" ? 1.12 : 1.04;
+        m.scale.setScalar(s);
+        group.add(m);
+        meshesById.set(n.id, m);
+        dataByUuid.set(m.uuid, n);
+      }
+
+      const edgeLines = [];
+      const edgeMat = new THREE.LineBasicMaterial({ color: 0x88a1ff, transparent: true, opacity: 0.25 });
+      const edgeMatStrong = new THREE.LineBasicMaterial({ color: 0x7cffd8, transparent: true, opacity: 0.35 });
+      for (const [a,b] of edges) {
+        const A = meshesById.get(a).position;
+        const B = meshesById.get(b).position;
+        const g = new THREE.BufferGeometry().setFromPoints([A,B]);
+        const mat = (a === "orchestrator" || b === "orchestrator") ? edgeMatStrong : edgeMat;
+        const line = new THREE.Line(g, mat);
+        group.add(line);
+        edgeLines.push({ line, a, b });
+      }
+
+      // Controls (simple orbit)
+      let isDown = false, lastX = 0, lastY = 0;
+      let yaw = 0.0, pitch = -0.18, radius = 22;
+      const target = new THREE.Vector3(1.8, 0.2, 0);
+      const updateCam = () => {
+        const x = target.x + radius * Math.cos(pitch) * Math.sin(yaw);
+        const y = target.y + radius * Math.sin(pitch);
+        const z = target.z + radius * Math.cos(pitch) * Math.cos(yaw);
+        camera.position.set(x,y,z);
+        camera.lookAt(target);
+      };
+      updateCam();
+
+      renderer.domElement.addEventListener("mousedown", (e) => { isDown = true; lastX=e.clientX; lastY=e.clientY; });
+      window.addEventListener("mouseup", () => { isDown = false; });
+      window.addEventListener("mousemove", (e) => {
+        if (!isDown) return;
+        const dx = e.clientX-lastX, dy = e.clientY-lastY;
+        lastX=e.clientX; lastY=e.clientY;
+        yaw -= dx * 0.005;
+        pitch -= dy * 0.005;
+        pitch = Math.max(-1.2, Math.min(0.9, pitch));
+        updateCam();
+      }, { passive:true });
+
+      renderer.domElement.addEventListener("wheel", (e) => {
+        radius *= (e.deltaY > 0) ? 1.06 : 0.94;
+        radius = Math.max(12, Math.min(50, radius));
+        updateCam();
+      }, { passive:true });
+
+      window.addEventListener("keydown", (e) => {
+        if (e.key.toLowerCase() !== "r") return;
+        yaw = 0.0; pitch = -0.18; radius = 22;
+        target.set(1.8, 0.2, 0);
+        setFocus("orchestrator");
+        updateCam();
+      });
+
+      // Focus UI
+      const focusTitle = document.getElementById("focusTitle");
+      const focusBody = document.getElementById("focusBody");
+      const focusPills = document.getElementById("focusPills");
+      let focusedId = "orchestrator";
+
+      function setFocus(id){
+        focusedId = id;
+        const n = nodes.find(x => x.id === id) ?? nodes[0];
+        focusTitle.textContent = `Focus: ${n.title}`;
+        focusBody.textContent = n.body;
+        focusPills.innerHTML = "";
+        for (const p of (n.pills ?? [])) {
+          const el = document.createElement("div");
+          el.className = "pill";
+          el.textContent = p;
+          focusPills.appendChild(el);
+        }
+      }
+      setFocus("orchestrator");
+
+      // Click to focus
+      const ray = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+      renderer.domElement.addEventListener("click", (e) => {
+        const r = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+        mouse.y = -(((e.clientY - r.top) / r.height) * 2 - 1);
+        ray.setFromCamera(mouse, camera);
+        const hits = ray.intersectObjects([...meshesById.values()], false);
+        if (!hits.length) return;
+        const id = hits[0].object.userData.id;
+        setFocus(id);
+        target.lerp(meshesById.get(id).position, 0.55);
+        updateCam();
+      });
+
+      // Scroll-driven focus + TOC highlight
+      const toc = document.getElementById("toc");
+      const tocLinks = [...toc.querySelectorAll("a[href^='#']")];
+      const sections = [...document.querySelectorAll("section.concept")];
+
+      function activateLink(id){
+        for (const a of tocLinks) a.classList.toggle("active", a.getAttribute("href") === `#${id}`);
+      }
+
+      const io = new IntersectionObserver((entries) => {
+        // choose the most visible entry
+        const visible = entries
+          .filter(e => e.isIntersecting)
+          .sort((a,b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible) return;
+        const sec = visible.target;
+        const focus = sec.getAttribute("data-focus") || "orchestrator";
+        setFocus(focus);
+        activateLink(sec.id);
+      }, { root: null, threshold: [0.12, 0.22, 0.35, 0.5, 0.65] });
+      sections.forEach(s => io.observe(s));
+
+      // Smooth-scroll TOC
+      tocLinks.forEach(a => {
+        a.addEventListener("click", (e) => {
+          e.preventDefault();
+          const id = a.getAttribute("href").slice(1);
+          document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      });
+
+      // Animation
+      const clock = new THREE.Clock();
+      function tick(){
+        const t = clock.getElapsedTime();
+        for (const n of nodes) {
+          const m = meshesById.get(n.id);
+          const base = pos[n.id];
+          const wob = n.type === "tool" ? 0.09 : 0.06;
+          m.position.x = base.x + Math.sin(t*0.7 + base.z*0.2) * wob;
+          m.position.y = base.y + Math.cos(t*0.6 + base.x*0.16) * wob;
+          m.position.z = base.z + Math.sin(t*0.5 + base.y*0.18) * wob;
+          m.rotation.x += 0.002;
+          m.rotation.y += 0.003;
+
+          const isFocused = (n.id === focusedId);
+          const targetEm = isFocused ? 0.60 : 0.22;
+          m.material.emissiveIntensity += (targetEm - m.material.emissiveIntensity) * 0.08;
+        }
+
+        // Update edge endpoints
+        for (const e of edgeLines) {
+          const A = meshesById.get(e.a).position;
+          const B = meshesById.get(e.b).position;
+          const attr = e.line.geometry.attributes.position;
+          attr.setXYZ(0, A.x, A.y, A.z);
+          attr.setXYZ(1, B.x, B.y, B.z);
+          attr.needsUpdate = true;
+        }
+
+        renderer.render(scene, camera);
+        requestAnimationFrame(tick);
+      }
+      tick();
+
+      // Resize
+      function resize(){
+        const w = wrap.clientWidth;
+        const h = wrap.clientHeight;
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+      window.addEventListener("resize", resize);
+      // Some browsers report 0 until after layout; kick once.
+      setTimeout(resize, 50);
+
+      // Scroll progress bar
+      const prog = document.getElementById("prog");
+      const updateProg = () => {
+        const h = document.documentElement.scrollHeight - window.innerHeight;
+        const p = h <= 0 ? 0 : (window.scrollY / h) * 100;
+        prog.style.width = `${Math.max(0, Math.min(100, p))}%`;
+      };
+      updateProg();
+      window.addEventListener("scroll", updateProg, { passive: true });
+    </script>
+  </body>
+</html>
+
